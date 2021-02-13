@@ -4,10 +4,6 @@ import smtplib
 import time
 import xlrd
 
-## TO DO ##
-# GUI   
-###########
-
 def open_data(source):
     # Open Excel document
     
@@ -16,43 +12,49 @@ def open_data(source):
 
     return data_sheet
 
-def get_values(data_sheet, email_col, code_col):
-    # Extract email and codes, add to dictionary of email:[code] pairs. 
+def get_values(data_sheet, email_col, a_col, b_col):
+    # Extract email and codes or email, user, and password, add to dictionary of email:[code] email:[user,pass] pairs. 
     # e.g. {a@gmail.com:['CODE'], b@yahoo.co.uk:['CODE','CODE']}
     
-    amt_urls = data_sheet.nrows-1
+    send_total = data_sheet.nrows-1
     count = 1  # Start at 1 as first row is titles
     stored = ''
-    emco_pairs = {}
+    email_vals = {}
 
-    if data_sheet.cell_value(0, code_col) != 'Code' or data_sheet.cell_value(0, email_col) != 'Email':
-        return("ERROR - Either Email or Code column mismatched.")
-    for i in range(amt_urls):
-        code = data_sheet.cell_value(count,code_col)  # cell_value(ROW,COL)
-        eAddr = data_sheet.cell_value(count,email_col)
+    for i in range(send_total):
+        eAddr = data_sheet.cell_value(count, email_col)
         if eAddr == '':  # If blank, use previous Email
             eAddr = stored
-        if eAddr in emco_pairs: 
-            emco_pairs[eAddr].append(code)  # If email already exists, append new code so one email for multiple codes
+        if b_col:
+            username = data_sheet.cell_value(count,a_col)
+            password = data_sheet.cell_value(count, b_col)
+            if eAddr in email_vals: 
+                email_vals[eAddr].append(username)  # If email already exists, append new user pass pair so one email for multiple users and pass.
+                email_vals[eAddr].append(password)  # Two appends instead of tuple as allows code reuse later.
+            else:
+                email_vals[eAddr] = [username, password]
         else:
-            emco_pairs[eAddr] = [code]          
+            code = data_sheet.cell_value(count, a_col)  # cell_value(ROW,COL)
+            if eAddr in email_vals: 
+                email_vals[eAddr].append(code)  # If email already exists, append new code so one email for multiple codes
+            else:
+                email_vals[eAddr] = [code]          
         stored = eAddr  # Stored email incase next blank therefore same family
         count += 1
 
-    return emco_pairs
+    return email_vals
 
-def format_email(emco_pairs, sender, pwd, subject):
+def format_email(email_vals, sender, pwd, subject, multi):
     # Format email using MIME. 
     # Function includes 1 time based and 1 exponential rate throttler.
     
-    vc_tot = 0
     count = 1
     throttle = 1
     missed = []
     start = time.time()
     limit_timer = start
     
-    for addr in emco_pairs:
+    for addr in email_vals:
         if count % 31 == 0:
             loop_time = time.time() - limit_timer
             if int(loop_time) < 60:
@@ -61,14 +63,17 @@ def format_email(emco_pairs, sender, pwd, subject):
                 time.sleep(delay)
                 print('Continuing...')
                 limit_timer = time.time()
-        vc = ''
+        details = ''
         email = addr
-        code = emco_pairs.get(addr, '')
-        for i in code:
-            vc_tot += 1
-            vc = f'{vc+str(i)}\n\n'
+        e_values = email_vals.get(addr, '')
+        for i in e_values:
+            if multi:
+                details = f'{details+str(i)}\n'
+            else:
+                details = f'{details+str(i)}\n\n'
+            
 
-        body = f'EMAIL BODY HERE\n\nCodes: {vc}'
+        body = f'EMAIL BODY HERE\n\nCodes: {details}'
         msg = MIMEText(body)
         msg['To'] = email
         msg['From'] = sender
@@ -76,7 +81,7 @@ def format_email(emco_pairs, sender, pwd, subject):
         
         try:
             send_email(sender, pwd, msg)
-            print(f"Email sent to: {email} with {len(code)} code(s)")  # Printing to terminal decreases send speed.
+            print(f"Email sent to: {email}")  # Printing to terminal decreases send speed.
             print("*"*20)
         except:
             throttle += throttle
@@ -96,7 +101,7 @@ def format_email(emco_pairs, sender, pwd, subject):
                 print(f"Unable to send email to: {m['To']}")
     time_taken = str(timedelta(seconds=round(time.time() - start, 2)))[2:10]
     
-    return print(f'Sent {len(emco_pairs)} emails in {time_taken}')
+    return print(f'Sent {len(email_vals)} emails in {time_taken}')
     
 def send_email(sender, pwd, msg):
     # Send MIME formatted email
@@ -113,6 +118,30 @@ def send_email(sender, pwd, msg):
     
     return
 
+def food_voucher_sender(source, sender, pwd, subject):
+    email_col = 3  # D
+    code_col = 7   # H
+    unused_col = None  # Unused in this function
+    
+    data_sheet = open_data(source)
+    if (data_sheet.cell_value(0, email_col) != 'Code' or 
+            data_sheet.cell_value(0, code_col) != 'Username'):
+        return print('ERROR: Colum name values do not match.')
+    email_codes = get_values(data_sheet, email_col, code_col, unused_col)
+    format_email(email_codes, sender, pwd, subject, False)
+    
+def user_pass_sender(source, sender, pwd, subject):
+    email_col = 0
+    user_col = 0
+    pwd_col = 0
+    data_sheet = open_data(source)
+    if (data_sheet.cell_value(0, email_col) != 'Code' or 
+            data_sheet.cell_value(0, user_col) != 'Username'  or 
+            data_sheet.cell_value(0, pwd_col) != 'Password'):
+        return print('ERROR: Colum name values do not match.')
+    e_usr_pass = get_values(data_sheet, email_col, user_col, pwd_col)
+    format_email(e_usr_pass, sender, pwd, subject, True)
+    
 def main():
     # Office 365 imposes a limit of
     # 30 messages sent per minute, and a limit of 10,000 recipients per day.
@@ -121,12 +150,15 @@ def main():
     sender = ''  # Outlook Email address here. e.g. test@outlook.com
     pwd = ''  # Plaintext password here
     subject = 'Voucher Codes'  # Constant between every email
-    email_col = 3  # D
-    code_col = 7   # H
     
-    data_sheet = open_data(source)
-    email_codes = get_values(data_sheet, email_col, code_col)
-    format_email(email_codes, sender, pwd, subject)
+    selection = 'fv'
+    
+    if selection == 'fv':
+        food_voucher_sender(source, sender, pwd, subject)
+    elif selection == 'ep':
+        user_pass_sender(source, sender, pwd, subject)
+    else:
+        return print('Error')
     
 if __name__ == "__main__":
     main()
