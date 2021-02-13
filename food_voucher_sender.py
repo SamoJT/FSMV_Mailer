@@ -4,6 +4,10 @@ import smtplib
 import time
 import xlrd
 
+## TO DO ##
+# GUI   
+###########
+
 def open_data(source):
     # Open Excel document
     
@@ -21,7 +25,7 @@ def get_values(data_sheet, email_col, code_col):
     stored = ''
     emco_pairs = {}
 
-    if data_sheet.cell_value(0,code_col) != 'Code' or data_sheet.cell_value(0,email_col) != 'Email':
+    if data_sheet.cell_value(0, code_col) != 'Code' or data_sheet.cell_value(0, email_col) != 'Email':
         return("ERROR - Either Email or Code column mismatched.")
     for i in range(amt_urls):
         code = data_sheet.cell_value(count,code_col)  # cell_value(ROW,COL)
@@ -108,7 +112,6 @@ def send_email(sender, pwd, msg):
     server.quit()
     
     return
-        
 
 def main():
     # Office 365 imposes a limit of
@@ -125,6 +128,5 @@ def main():
     email_codes = get_values(data_sheet, email_col, code_col)
     format_email(email_codes, sender, pwd, subject)
     
-
 if __name__ == "__main__":
     main()
