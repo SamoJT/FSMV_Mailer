@@ -1,5 +1,6 @@
 from email.mime.text import MIMEText
 from datetime import timedelta
+import sys
 import smtplib
 import time
 import xlrd
@@ -47,7 +48,7 @@ def get_values(data_sheet, email_col, a_col, b_col):
 def format_email(email_vals, sender, pwd, subject, multi):
     # Format email using MIME. 
     # Function includes 1 time based and 1 exponential rate throttler.
-    
+    print('-- Debug -- in format')
     count = 1
     throttle = 1
     missed = []
@@ -58,7 +59,7 @@ def format_email(email_vals, sender, pwd, subject, multi):
         if count % 31 == 0:
             loop_time = time.time() - limit_timer
             if int(loop_time) < 60:
-                delay = int(60-loop_time)/2
+                delay = int(60-loop_time)
                 print(f'!!! Hit rate limit. Sleeping for {delay} sec(s) !!!')
                 time.sleep(delay)
                 print('Continuing...')
@@ -82,7 +83,10 @@ def format_email(email_vals, sender, pwd, subject, multi):
         try:
             send_email(sender, pwd, msg)
             print(f"Email sent to: {email}")  # Printing to terminal decreases send speed.
+            print(details)
             print("*"*20)
+        except KeyboardInterrupt:
+            sys.exit()
         except:
             throttle += throttle
             print(f'!!! Hit exception. Sleeping for {throttle} secs. !!!')
@@ -105,7 +109,7 @@ def format_email(email_vals, sender, pwd, subject, multi):
     
 def send_email(sender, pwd, msg):
     # Send MIME formatted email
-    
+    print('-- Debug -- in send')
     svr = 'smtp.office365.com'
     port = '587'
     server = smtplib.SMTP(svr, port)
@@ -124,32 +128,36 @@ def food_voucher_sender(source, sender, pwd, subject):
     unused_col = None  # Unused in this function
     
     data_sheet = open_data(source)
-    if (data_sheet.cell_value(0, email_col) != 'Code' or 
-            data_sheet.cell_value(0, code_col) != 'Username'):
-        return print('ERROR: Colum name values do not match.')
+    print('-- Debug -- got sheet')
+    if (data_sheet.cell_value(0, email_col) != 'Email' or 
+            data_sheet.cell_value(0, code_col) != 'Code'):
+        return print('ERROR: Column name values do not match.')
     email_codes = get_values(data_sheet, email_col, code_col, unused_col)
+    print('-- Debug -- got vals')
     format_email(email_codes, sender, pwd, subject, False)
+    return
     
 def user_pass_sender(source, sender, pwd, subject):
-    email_col = 0
-    user_col = 0
-    pwd_col = 0
+    email_col = 3
+    user_col = 6  # G
+    pwd_col = 7   # H
     data_sheet = open_data(source)
-    if (data_sheet.cell_value(0, email_col) != 'Code' or 
+    if (data_sheet.cell_value(0, email_col) != 'Email' or 
             data_sheet.cell_value(0, user_col) != 'Username'  or 
             data_sheet.cell_value(0, pwd_col) != 'Password'):
-        return print('ERROR: Colum name values do not match.')
+        return print('ERROR: Column name values do not match.')
     e_usr_pass = get_values(data_sheet, email_col, user_col, pwd_col)
     format_email(e_usr_pass, sender, pwd, subject, True)
+    return
     
 def main():
     # Office 365 imposes a limit of
     # 30 messages sent per minute, and a limit of 10,000 recipients per day.
     
-    source = 'sample.xlsx'
+    source = 'code_sample.xlsx'
     sender = ''  # Outlook Email address here. e.g. test@outlook.com
     pwd = ''  # Plaintext password here
-    subject = 'Voucher Codes'  # Constant between every email
+    subject = 'User pass'  # Constant between every email
     
     selection = 'fv'
     
@@ -159,6 +167,7 @@ def main():
         user_pass_sender(source, sender, pwd, subject)
     else:
         return print('Error')
+    return
     
 if __name__ == "__main__":
     main()
