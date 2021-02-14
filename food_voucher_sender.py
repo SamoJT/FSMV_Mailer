@@ -1,6 +1,6 @@
 from email.mime.text import MIMEText
 from datetime import timedelta
-import sys
+from sys import exit
 import smtplib
 import time
 import xlrd
@@ -22,7 +22,7 @@ def get_values(data_sheet, email_col, a_col, b_col):
     stored = ''
     email_vals = {}
 
-    for i in range(send_total):
+    for _ in range(send_total):
         eAddr = data_sheet.cell_value(count, email_col)
         if eAddr == '':  # If blank, use previous Email
             eAddr = stored
@@ -67,26 +67,24 @@ def format_email(email_vals, sender, pwd, subject, multi):
         details = ''
         email = addr
         e_values = email_vals.get(addr, '')
-        for i in e_values:
-            if multi:
-                details = f'{details+str(i)}\n'
-            else:
+        if multi:
+            details = f'Username: {e_values[0]}\nPassword: {e_values[1]}\n'
+        else:
+            for i in e_values:
                 details = f'{details+str(i)}\n\n'
-            
 
-        body = f'EMAIL BODY HERE\n\nCodes: {details}'
+        body = f'Dear Sir/Madam\n\nPlease find your username and password below:\nUsername:{details}'
         msg = MIMEText(body)
         msg['To'] = email
         msg['From'] = sender
         msg['Subject'] = subject
         
         try:
-            send_email(sender, pwd, msg)
-            print(f"Email sent to: {email}")  # Printing to terminal decreases send speed.
-            print(details)
+            # send_email(sender, pwd, msg)
+            print(f"Email sent to: {email} with {details}")  # Printing to terminal decreases send speed.
             print("*"*20)
         except KeyboardInterrupt:
-            sys.exit()
+            exit()
         except:
             throttle += throttle
             print(f'!!! Hit exception. Sleeping for {throttle} secs. !!!')
@@ -154,19 +152,19 @@ def main():
     # Office 365 imposes a limit of
     # 30 messages sent per minute, and a limit of 10,000 recipients per day.
     
-    source = 'code_sample.xlsx'
+    source = 'usr_pass_sample.xlsx'
     sender = ''  # Outlook Email address here. e.g. test@outlook.com
     pwd = ''  # Plaintext password here
     subject = 'User pass'  # Constant between every email
     
-    selection = 'fv'
+    selection = 'ep'
     
     if selection == 'fv':
         food_voucher_sender(source, sender, pwd, subject)
     elif selection == 'ep':
         user_pass_sender(source, sender, pwd, subject)
     else:
-        return print('Error')
+        return ValueError('Invalid option')
     return
     
 if __name__ == "__main__":
